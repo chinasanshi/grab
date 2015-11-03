@@ -90,8 +90,8 @@ void get_3d_model(Mat& left_image, Mat& right_image, int algorithm_no = 1, const
 
 	img1 = img1r;
 	img2 = img2r;
-	imwrite("leftr.jpg", img1r);
-	imwrite("rightr.jpg", img2r);
+	//imwrite("leftr.jpg", img1r);
+	//imwrite("rightr.jpg", img2r);
 
 	numberOfDisparities = numberOfDisparities > 0 ? numberOfDisparities : ((img_size.width / 8) + 15) & -16;
 	// bm算法的参数设置
@@ -243,12 +243,18 @@ void get_3d_model(Mat& left_image, Mat& right_image, int algorithm_no = 1, const
 			float object_depth = 0;
 			// 设置候选点作为深度参考标准
 			vector<float> candidate_point;
-			int candidate_x = 200;// x方向划直线的条数
-			int candidate_y = 100;// y方向划直线的条数
+			int candidate_x = 20;// x方向划直线的条数
+			int candidate_y = 10;// y方向划直线的条数
 			int candidate_save_num = 1;// 保留候选点个数的一半
 			for (int i = 1; i <= candidate_y; ++i) {
 				for (int j = 1; j <= candidate_x; ++j) {
-					object_depth = xyz.at<Vec3f>((int)(it->x + (1.0 / (candidate_x + 1)) * j * it->width), (int)(it->y + (1.0 / (candidate_y + 1)) * i * it->height))[2];
+					int x = (int)(it->x + (1.0 / (candidate_x + 1)) * j * it->width);
+					int y = (int)(it->y + (1.0 / (candidate_y + 1)) * i * it->height);
+					if (x<0 || x>xyz.rows || y<0 || y>xyz.cols){
+						continue;
+					}
+					//object_depth = xyz.at<Vec3f>((int)(it->x + (1.0 / (candidate_x + 1)) * j * it->width), (int)(it->y + (1.0 / (candidate_y + 1)) * i * it->height))[2];
+					object_depth = xyz.at<Vec3f>(x, y)[2];
 
 					// 输出候选点的x,y,z坐标
 					// cout << xyz.at<Vec3f>((int)(it->x + (1.0 / (candidate_x + 1)) * j * it->width), (int)(it->y + (1.0 / (candidate_y + 1)) * i * it->height))[0] << " "  \
@@ -263,11 +269,25 @@ void get_3d_model(Mat& left_image, Mat& right_image, int algorithm_no = 1, const
 			// 只保留指定的中间的几个候选点，来排除干扰
 			int num = 0;
 			object_depth = 0;
-			for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_x * candidate_y / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_x * candidate_y / 2 - candidate_save_num); ++it_point) {
-				object_depth += *it_point;
-				num++;
+			//for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_x * candidate_y / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_x * candidate_y / 2 - candidate_save_num); ++it_point) {
+			//	object_depth += *it_point;
+			//	num++;
+			//}
+			if (candidate_point.size() < 2 * candidate_save_num){
+				for (vector<float>::iterator it_point = candidate_point.begin(); it_point != candidate_point.end(); ++it_point) {
+					object_depth += *it_point;
+					num++;
+				}
 			}
-			object_depth /= num;
+			else{
+				for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_point.size() / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_point.size() / 2 - candidate_save_num); ++it_point) {
+					object_depth += *it_point;
+					num++;
+				}
+			}
+			if (num != 0){
+				object_depth /= num;
+			}
 			cout << "目标深度" << object_depth * 8 / 10 << "cm" << endl;
 
 			// 待夹取目标的横纵坐标
@@ -280,68 +300,129 @@ void get_3d_model(Mat& left_image, Mat& right_image, int algorithm_no = 1, const
 			// 左抓取点坐标点的x
 			candidate_point.clear();
 			for (int i = 1; i <= candidate_y; ++i) {
-				object_left_x = xyz.at<Vec3f>((int)(it->x), (int)(it->y + (1.0 / (candidate_y + 1)) * i * it->height))[0];
+				int x = (int)(it->x);
+				int y = (int)(it->y + (1.0 / (candidate_y + 1)) * i * it->height);
+				if (x<0 || x>xyz.rows || y<0 || y>xyz.cols){
+					continue;
+				}
+				object_left_x = xyz.at<Vec3f>(x,y)[0];
 				candidate_point.push_back(object_left_x);
 			}
 			sort(candidate_point.begin(), candidate_point.end());
 			num = 0;
 			object_left_x = 0;
-			for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_y / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_y / 2 - candidate_save_num); ++it_point) {
-				object_left_x += *it_point;
-				num++;
+			if (candidate_point.size() < 2 * candidate_save_num){
+				for (vector<float>::iterator it_point = candidate_point.begin(); it_point != candidate_point.end(); ++it_point) {
+					object_left_x += *it_point;
+					num++;
+				}
 			}
-			object_left_x /= num;
+			else{
+				for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_y / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_y / 2 - candidate_save_num); ++it_point) {
+					object_left_x += *it_point;
+					num++;
+				}
+			}
+			if (num != 0){
+				object_left_x /= num;
+			}
 
 			// 左抓取点坐标点的y
 			candidate_point.clear();
 			for (int i = 1; i <= candidate_x; ++i) {
-				object_left_y = xyz.at<Vec3f>((int)(it->x + (1.0 / (candidate_x + 1)) * i * it->width), (int)(it->y + 0.5 * it->height))[1];
+				int x = (int)(it->x + (1.0 / (candidate_x + 1)) * i * it->width);
+				int y = (int)(it->y + 0.5 * it->height);
+				if (x<0 || x>xyz.rows || y<0 || y>xyz.cols){
+					continue;
+				}
+				object_left_y = xyz.at<Vec3f>(x,y)[1];
 				candidate_point.push_back(object_left_y);
 			}
 			sort(candidate_point.begin(), candidate_point.end());
 			num = 0;
 			object_left_y = 0;
-			for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_x / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_x / 2 - candidate_save_num); ++it_point) {
-				object_left_y += *it_point;
-				num++;
+			if (candidate_point.size() < 2 * candidate_save_num){
+				for (vector<float>::iterator it_point = candidate_point.begin(); it_point != candidate_point.end(); ++it_point) {
+					object_left_y += *it_point;
+					num++;
+				}
 			}
-			object_left_y /= num;
+			else{
+				for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_x / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_x / 2 - candidate_save_num); ++it_point) {
+					object_left_y += *it_point;
+					num++;
+				}
+			}
+			if (num != 0){
+				object_left_y /= num;
+
+			}
 
 			// 右抓取点坐标点的x
 			candidate_point.clear();
 			for (int i = 1; i <= candidate_y; ++i) {
-				object_right_x = xyz.at<Vec3f>((int)(it->x + it->width), (int)(it->y + (1.0 / (candidate_y + 1)) * i * it->height))[0];
+				int x = (int)(it->x + it->width);
+				int y = (int)(it->y + (1.0 / (candidate_y + 1)) * i * it->height);
+				if (x<0 || x>xyz.rows || y<0 || y>xyz.cols){
+					continue;
+				}
+				object_right_x = xyz.at<Vec3f>(x,y)[0];
 				candidate_point.push_back(object_right_x);
 			}
 			sort(candidate_point.begin(), candidate_point.end());
 			num = 0;
 			object_right_x = 0;
-			for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_y / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_y / 2 - candidate_save_num); ++it_point) {
-				object_right_x += *it_point;
-				num++;
+			if (candidate_point.size() < 2 * candidate_save_num){
+				for (vector<float>::iterator it_point = candidate_point.begin(); it_point != candidate_point.end(); ++it_point) {
+					object_right_x += *it_point;
+					num++;
+				}
 			}
-			object_right_x /= num;
+			else{
+				for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_y / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_y / 2 - candidate_save_num); ++it_point) {
+					object_right_x += *it_point;
+					num++;
+				}
+			}
+			if (num != 0){
+				object_right_x /= num;
+			}
 
 			// 右抓取点坐标点的y
 			candidate_point.clear();
 			for (int i = 1; i <= candidate_x; ++i) {
-				object_right_y = xyz.at<Vec3f>((int)(it->x + (1.0 / (candidate_x + 1)) * i * it->width), (int)(it->y + 0.5 * it->height))[1];
+				int x = (int)(it->x + (1.0 / (candidate_x + 1)) * i * it->width);
+				int y = (int)(it->y + 0.5 * it->height);
+				if (x<0 || x>xyz.rows || y<0 || y>xyz.cols){
+					continue;
+				}
+				object_right_y = xyz.at<Vec3f>(x,y)[1];
 				candidate_point.push_back(object_right_y);
 			}
 			sort(candidate_point.begin(), candidate_point.end());
 			num = 0;
 			object_right_y = 0;
-			for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_x / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_x / 2 - candidate_save_num); ++it_point) {
-				object_right_y += *it_point;
-				num++;
+			if (candidate_point.size() < 2 * candidate_save_num){
+				for (vector<float>::iterator it_point = candidate_point.begin(); it_point != candidate_point.end(); ++it_point) {
+					object_right_y += *it_point;
+					num++;
+				}
 			}
-			object_right_y /= num;
+			else{
+				for (vector<float>::iterator it_point = candidate_point.begin() + (candidate_x / 2 - candidate_save_num); it_point != candidate_point.end() - (candidate_x / 2 - candidate_save_num); ++it_point) {
+					object_right_y += *it_point;
+					num++;
+				}
+			}
+			if (num != 0){
+				object_right_y /= num;
+			}
 
 			cout << "夹取坐标点X1:(" << object_left_x * 8 / 10 << "," << object_left_y * 8 / 10 << ") " << "X2:(" << object_right_x * 8 / 10 << "," << object_right_y * 8 / 10 << ")" << endl;
 		}
 		imshow("rect", disp_fore);
 	}
-	waitKey();
+	//waitKey();
 }
 
 int main() {
@@ -350,12 +431,18 @@ int main() {
 	left_capture.open(0);
 	right_capture.open(1);
 	Mat left, right;
+	long long framenum = 0;
 	while (1){
+		++framenum;
 		left_capture >> left;
 		right_capture >> right;
 		imshow("left", left);
 		imshow("right", right);
-		get_3d_model(left, right, 1, "intrinsics.yml", "extrinsics.yml");
+		//Mat smallleft, smallright;
+		//resize(left, smallleft, Size(), 0.5, 0.5);
+		//resize(right, smallright, Size(), 0.5, 0.5);
+		if (framenum % 100 == 0)
+			get_3d_model(left, right, 1, "intrinsics.yml", "extrinsics.yml");
 		char c = waitKey(33);
 		if (c == 27){
 			break;
